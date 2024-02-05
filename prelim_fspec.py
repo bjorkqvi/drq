@@ -8,6 +8,12 @@ import pandas as pd
 
 def interp_nan(ts: xr.DataArray) -> tuple[np.ndarray, np.ndarray]:
     """Interpolates NaN values from the yanked eta-timeseries and determined dt [s]"""
+    number_of_nans = len(np.where(np.isnan(ts.eta.values))[0])
+    if number_of_nans == 0:
+        print(f"Non Nan-values found!")
+    else:
+        print(f"Interpolating {number_of_nans} NaN-values...")
+
     dt = int(np.mean(np.diff(ts.time))) / 1_000_000_000
     z = pd.Series(ts.eta.values).interpolate().tolist()
     return z, dt
@@ -41,7 +47,8 @@ def plot_saturation_spec(ax, f, E, power: float = 5):
     return ax
 
 
-ds = xr.open_dataset("sv_data/ekofisk/xygrid_50cm_20191209_1200_plane_sub.nc")
+ds = xr.open_dataset("sv_data/ekofisk/xygrid_50cm_20231124_1300_plane_sub.nc")
+# ds = xr.open_dataset("sv_data/ekofisk/xygrid_50cm_20191209_1200_plane_sub.nc")
 fig, ax = plt.subplots(2, 2)
 for x in range(49, 52):
     for y in range(49, 52):
