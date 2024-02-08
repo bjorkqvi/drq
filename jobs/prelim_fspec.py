@@ -47,7 +47,7 @@ def plot_saturation_spec(ax, f, E, power: float = 5):
     return ax
 
 
-ds = xr.open_dataset("sv_data/ekofisk/xygrid_50cm_20231124_1300_plane_sub.nc")
+ds = xr.open_dataset("../sv_data/ekofisk/xygrid_50cm_20231124_1300_plane_sub.nc")
 # ds = xr.open_dataset("sv_data/ekofisk/xygrid_50cm_20191209_1200_plane_sub.nc")
 fig, ax = plt.subplots(2, 2)
 for x in range(49, 52):

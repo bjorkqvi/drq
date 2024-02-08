@@ -1,0 +1,15 @@
+[project]
+name = "drq"
+version = "0.0.1"
+description = "Stereo-video to inverse phase-speed processing"
+authors = [ { name = "Jan-Victor Björkqvist", email = "janvb@met.no" } ]
+dependencies = [ "numpy", "xarray", "pandas", "scipy", "geo-skeletons" ]
+
+#[project.optional-dependencies]
+#tests = [ "numpy", "xarray", "pandas", "utm", "geopy"]
+
+[tool.setuptools]
+packages = ["drq"]
+
+[project.urls]
+repository = "http://github.com/bjorkqvi/drq"
