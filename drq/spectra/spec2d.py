@@ -1,3 +1,9 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .spec3d import F3D
+
 from geo_skeletons import PointSkeleton
 from geo_skeletons.decorators import (
     add_datavar,
@@ -39,7 +45,7 @@ class Fkf(PointSkeleton):
 @add_coord(name="ky")
 class Fkxy(PointSkeleton):
     @classmethod
-    def from_ds(
+    def from_waveplane(
         cls,
         ds: xr.Dataset,
         x: tuple[float, float] = (-35.0, 25.0),
@@ -61,6 +67,11 @@ class Fkxy(PointSkeleton):
             }
         )
         return spec
+
+    @classmethod
+    def from_f3d(cls, f3d: F3D) -> Fkxy:
+        spec_ds = f3d.ds().integrate(coord="freq")
+        return cls.from_ds(spec_ds)
 
     def m(self, moment: float) -> float:
         return (

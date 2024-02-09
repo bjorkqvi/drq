@@ -1,3 +1,9 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .spec3d import F3D
+
 from geo_skeletons import PointSkeleton
 from geo_skeletons.decorators import (
     add_datavar,
@@ -8,6 +14,7 @@ import xarray as xr
 import scipy as sp
 import numpy as np
 import matplotlib.pyplot as plt
+
 import pandas as pd
 
 from drq import dispersion
@@ -17,7 +24,7 @@ from drq import dispersion
 @add_frequency()
 class Ef(PointSkeleton):
     @classmethod
-    def from_ds(cls, ds: xr.Dataset, x: int = 0, y: int = -100):
+    def from_waveplane(cls, ds: xr.Dataset, x: int = 0, y: int = -100) -> Ef:
         ts = ds.sel(x=x, y=y).interpolate_na(dim="time")
         dt = int(np.mean(np.diff(ts.time))) / 1_000_000_000
         f, E = sp.signal.welch(ts.eta.values, fs=1 / dt, nperseg=len(ts.eta) / 8)
@@ -31,6 +38,13 @@ class Ef(PointSkeleton):
             }
         )
         return spec
+
+    @classmethod
+    def from_f3d(cls, f3d: F3D) -> Ef:
+        spec_ds = f3d.ds().integrate(coord="kx").integrate(coord="ky")
+        spec_ds = spec_ds.sel(freq=slice(0, 10_000))
+        spec_ds["spec"] = 2 * spec_ds["spec"]
+        return cls.from_ds(spec_ds)
 
     def m(self, moment: float) -> float:
         return (
@@ -62,9 +76,12 @@ class Ef(PointSkeleton):
         fig.show()
 
     def _set_plot_text(self, ax, power: float = None):
-        ax.set_title(
-            f"x={self.x()[0]}, y={self.y()[0]}, start_time: {self.ds().start_time} UTC"
-        )
+        try:
+            ax.set_title(
+                f"x={self.x()[0]}, y={self.y()[0]}, start_time: {self.ds().start_time} UTC"
+            )
+        except:
+            pass
 
         if power is None:
             ax.set_xlabel("f [Hz]")

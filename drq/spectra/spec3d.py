@@ -12,8 +12,15 @@ import pandas as pd
 
 
 @add_datavar(name="spec")
-@add_coord(name="kx")
-@add_coord(name="ky")
 @add_frequency()
+@add_coord(name="ky")
+@add_coord(name="kx")
 class F3D(PointSkeleton):
-    pass
+    def m(self, moment: float) -> float:
+        return (
+            self.spec(data_array=True)
+            .integrate(coord="kx")
+            .integrate(coord="ky")
+            .integrate(coord="freq")
+            .values[0]
+        )
