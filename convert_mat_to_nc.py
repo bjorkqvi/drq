@@ -1,7 +1,5 @@
 import scipy
 from drq.spectra.spec3d import F3D
-from drq.spectra.spec1d import Ef
-from drq.spectra.spec2d import Fkxy
 
 fn = "wass__20140310_094000_step03_smoothTS_lowess08"
 mat = scipy.io.loadmat(f"spec_data/acqua_alta/{fn}.mat")

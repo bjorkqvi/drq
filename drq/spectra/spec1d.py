@@ -96,6 +96,39 @@ class Ef(PointSkeleton):
 @add_coord(name="k")
 class Fk(PointSkeleton):
     @classmethod
+    def from_fkxy(cls, fkxy) -> Fk:
+        kx = fkxy.kx()
+        ky = fkxy.ky()
+        k = (kx[kx > 0] ** 2 + ky[ky > 0] ** 2) ** 0.5
+        k = k[k < max(fkxy.kx())]
+
+        theta = np.linspace(0, 2 * np.pi, len(kx * 2))
+        dtheta = np.mean(np.diff(theta))
+
+        new_spec = np.zeros(len(k))
+        for n in range(len(k)):
+            kx = k[n] * np.sin(theta)
+            ky = k[n] * np.cos(theta)
+            print(n)
+            new_spec[n] = (
+                np.sum(
+                    np.array(
+                        [
+                            fkxy.spec(data_array=True)
+                            .interp(kx=x, ky=y, method="nearest")
+                            .values[0]
+                            for (x, y) in zip(kx, ky)
+                        ]
+                    )
+                )
+                * dtheta
+            )
+
+        spec = cls(lon=fkxy.lon(), lat=fkxy.lat(), k=k)
+        spec.set_spec(new_spec, allow_reshape=True)
+        return spec
+
+    @classmethod
     def from_ef(cls, ef: Ef):
         k = dispersion.wavenumber(w=ef.freq(angular=True))
         cg = dispersion.group_speed(f=ef.freq())
@@ -136,10 +169,12 @@ class Fk(PointSkeleton):
         fig.show()
 
     def _set_plot_text(self, ax, power: float = None):
-        ax.set_title(
-            f"x={self.x()[0]}, y={self.y()[0]}, start_time: {self.ds().start_time} UTC"
-        )
-
+        try:
+            ax.set_title(
+                f"x={self.x()[0]}, y={self.y()[0]}, start_time: {self.ds().start_time} UTC"
+            )
+        except:
+            pass
         if power is None:
             ax.set_xlabel("k [rad/m]")
             ax.set_ylabel("F(k) [m^3]")
