@@ -56,7 +56,11 @@ for x in range(49, 52):
 
         z, dt = interp_nan(ts)
         f, E, df = calc_fspec(z, 1 / dt)
-
+        Ntd = len(z)
+        hannt = 0.5 * (1 - np.cos(2 * np.pi * np.linspace(0, Nt - 1, Nt) / (Nt - 1)))
+        wc = 1 / np.mean(hannt**2)
+        zf = sp.fft.fftshift(sp.fft.fftn(z))
+        KFspec_all = (np.abs(zf) ** 2 / (df) / (Nt)) * wc
         ax[0, 0] = plot_spec(
             ax[0, 0],
             f,
