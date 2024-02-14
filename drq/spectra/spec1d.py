@@ -19,22 +19,35 @@ import pandas as pd
 
 from drq import dispersion
 
+from drq.waveplane.waveplane import WavePlane
+
+
+class Spec1d:
+    def m0(self):
+        return self.m(moment=0)
+
+    def hs(self):
+        return 4 * np.sqrt(self.m0())
+
 
 @add_datavar(name="spec")
 @add_frequency()
-class Ef(PointSkeleton):
+class Ef(PointSkeleton, Spec1d):
     @classmethod
-    def from_waveplane(cls, ds: xr.Dataset, x: int = 0, y: int = -100) -> Ef:
-        ts = ds.sel(x=x, y=y).interpolate_na(dim="time")
+    def from_waveplane(cls, wp: WavePlane) -> Ef:
+        ts = wp.ds().interpolate_na(dim="time")
         dt = int(np.mean(np.diff(ts.time))) / 1_000_000_000
-        f, E = sp.signal.welch(ts.eta.values, fs=1 / dt, nperseg=len(ts.eta) / 8)
-        spec = cls(x=x, y=y, freq=f[1:])
+        n_seg = 8
+        f, E = sp.signal.welch(
+            np.squeeze(ts.eta.values), fs=1 / dt, nperseg=len(ts.eta) // n_seg
+        )
+        spec = cls(x=ts.x.values[0], y=ts.y.values[0], freq=f[1:])
         spec.set_spec(E[1:], allow_reshape=True)
         start_time = pd.to_datetime(ts.time.values[0])
         spec.set_metadata(
             {
                 "start_time": start_time.strftime("%Y-%m-%d %H:%M"),
-                "hs": 4 * np.std(ts.eta.values),
+                "hs_raw": 4 * np.std(ts.eta.values),
             }
         )
         return spec
@@ -42,8 +55,6 @@ class Ef(PointSkeleton):
     @classmethod
     def from_f3d(cls, f3d: F3D) -> Ef:
         spec_ds = f3d.ds().integrate(coord="kx").integrate(coord="ky")
-        spec_ds = spec_ds.sel(freq=slice(0, 10_000))
-        spec_ds["spec"] = 2 * spec_ds["spec"]
         return cls.from_ds(spec_ds)
 
     def m(self, moment: float) -> float:
@@ -94,7 +105,7 @@ class Ef(PointSkeleton):
 
 @add_datavar(name="spec")
 @add_coord(name="k")
-class Fk(PointSkeleton):
+class Fk(PointSkeleton, Spec1d):
     @classmethod
     def from_fkxy(cls, fkxy) -> Fk:
         kx = fkxy.kx()
@@ -186,7 +197,7 @@ class Fk(PointSkeleton):
 
 @add_datavar(name="spec")
 @add_coord(name="v")
-class Qv(PointSkeleton):
+class Qv(PointSkeleton, Spec1d):
     @classmethod
     def from_ef(cls, ef: Ef):
         c = dispersion.phase_speed(f=ef.freq())

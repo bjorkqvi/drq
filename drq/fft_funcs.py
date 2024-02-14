@@ -28,8 +28,8 @@ def welch_3d(
     time: np.ndarray,
     y: np.ndarray,
     x: np.ndarray,
-    n_seg: int = 8,
-    overlap: float = 0.5,
+    nperseg: int = 256,
+    noverlap: int = None,
 ):
     """Takes in surface elevation (time, y, x) and return spectrum (kx,ky,f).
     x- and y-dimensions must be the same (i.e. a square splane)"""
@@ -38,15 +38,16 @@ def welch_3d(
     eta = eta.T
     ## Spectrum will be (kx,ky,f)
     assert eta.shape == (len(x), len(y), len(time))
-    n_seg_long = (
-        n_seg - (n_seg - 1) * overlap
-    )  # Timeseries is this many segments long when accounting for overlap
+    if noverlap is None:
+        noverlap = nperseg // 2
+
+    # Create block indeces
+    start_inds = range(0, len(time) - nperseg, nperseg - noverlap)
 
     # One window segment is this many time steps long
-    Nt = np.floor(len(time) / n_seg_long).astype(int)
-
+    Nt = nperseg
     # Cut out any data that is a partial window segment long
-    eta = eta[:, :, 0 : int(Nt * n_seg_long)]
+    eta = eta[:, :, 0 : start_inds[-1] + nperseg]
 
     # In physical space
     Nx, Ny = len(x), len(y)
@@ -57,9 +58,9 @@ def welch_3d(
     # In spectral space
     f = sp.fft.fftshift(sp.fft.fftfreq(Nt, dt))
     df = np.median(np.diff(f))
-    kx = sp.fft.fftshift(sp.fft.fftfreq(Nx, dx))
+    kx = 2 * np.pi * sp.fft.fftshift(sp.fft.fftfreq(Nx, dx))
     dkx = np.median(np.diff(kx))
-    ky = sp.fft.fftshift(sp.fft.fftfreq(Ny, dy))
+    ky = 2 * np.pi * sp.fft.fftshift(sp.fft.fftfreq(Ny, dy))
     dky = np.median(np.diff(ky))
 
     hann = hann_3d(Nx, Ny, Nt)
@@ -67,12 +68,8 @@ def welch_3d(
     wc = 1 / np.sum(hann**2)
     # hann, wc = np.ones((gi.Nx, gi.Ny, gi.Nt)), 1
     KFspec_all = np.zeros((Nx, Ny, Nt))
-    t0 = int(-np.floor(Nt * overlap))
-    for n in range(n_seg):
-        t0 += int(np.floor(Nt * overlap))
-        t1 = int(t0 + Nt)
-        print(f"t0={t0}, t1={t1}")
-        z_3d = eta[:, :, t0:t1]
+    for n0 in start_inds:
+        z_3d = eta[:, :, n0 : n0 + nperseg]
         z_3d[np.isnan(z_3d)] = 0
         zw = (z_3d - np.mean(z_3d)) * hann
 
@@ -82,4 +79,4 @@ def welch_3d(
 
     # Return one-sided spectrum
     mask = f > 0
-    return 2 * KFspec_all[:, :, mask] / n_seg, kx, ky, f[mask]
+    return 2 * KFspec_all[:, :, mask] / len(start_inds), kx, ky, f[mask]

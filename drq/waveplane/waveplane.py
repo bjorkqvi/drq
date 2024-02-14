@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cmocean.cm
 import pandas as pd
+from matplotlib.widgets import Slider, Button, RadioButtons, TextBox
 
 
 @add_datavar(name="eta")
@@ -33,6 +34,13 @@ class WavePlane(GriddedSkeleton):
     def set_box(
         self, x: tuple[float, float], y: tuple[float, float], init: bool = False
     ):
+        x = np.atleast_1d(x)
+        y = np.atleast_1d(y)
+
+        if len(x) == 1:
+            x = (x[0], x[0])
+        if len(y) == 1:
+            y = (y[0], y[0])
         self.box_x = np.array(x)
         self.box_y = np.array(y)
 
@@ -55,31 +63,45 @@ class WavePlane(GriddedSkeleton):
         )
         return cut_wp
 
-    def plot(
-        self, time_ind: int = 0, time: np.datetime64 | str | pd.DatetimeIndex = None
-    ):
+    def plot(self):
+        def update_plot(val):
+            ax.cla()
+            ax.pcolormesh(
+                self.xgrid(),
+                self.ygrid(),
+                self.eta(data_array=True).isel(time=val),
+                cmap=cmocean.cm.diff,
+            )
+            time = pd.to_datetime(self.time()[val])
+            ax.plot(x, [y[0], y[0]], "r", linestyle="dashed")
+            ax.plot(x, [y[1], y[1]], "r", linestyle="dashed")
+            ax.plot([x[0], x[0]], y, "r", linestyle="dashed")
+            ax.plot([x[1], x[1]], y, "r", linestyle="dashed")
+            ax.set_xlabel("X [m]")
+            ax.set_ylabel("Y [m]")
+            ax.set_title(time.strftime("%Y-%m-%d %H:%M:%S"))
+
         fig, ax = plt.subplots(1)
-
-        if time is not None:
-            time = pd.to_datetime(time)
-        else:
-            time = pd.to_datetime(self.time()[time_ind])
-
-        ax.pcolormesh(
-            self.xgrid(),
-            self.ygrid(),
-            self.eta(time=time),
-            cmap=cmocean.cm.diff,
-        )
         x, y = self.box_x, self.box_y
-        ax.plot(x, [y[0], y[0]], "r", linestyle="dashed")
-        ax.plot(x, [y[1], y[1]], "r", linestyle="dashed")
-        ax.plot([x[0], x[0]], y, "r", linestyle="dashed")
-        ax.plot([x[1], x[1]], y, "r", linestyle="dashed")
-        ax.set_xlabel("X [m]")
-        ax.set_ylabel("Y [m]")
-        ax.set_title(time.strftime("%Y-%m-%d %H:%M:%S"))
-        fig.show()
+        if len(self.time()) > 1:
+            ax_slider = plt.axes([0.17, 0.05, 0.65, 0.03])
+            time_slider = Slider(
+                ax_slider,
+                "time_index",
+                0,
+                len(self.time()) - 1,
+                valinit=0,
+                valstep=1,
+            )
+            time_slider.on_changed(update_plot)
+
+        update_plot(0)
+
+        plt.show(block=True)
+
+        #
+
+        # fig.show()
 
     def m0(self, nan_to_zero: bool = True):
         eta = self.eta()

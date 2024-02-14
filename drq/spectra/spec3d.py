@@ -21,19 +21,24 @@ from drq.waveplane.waveplane import WavePlane
 @add_coord(name="kx")
 class F3D(PointSkeleton):
     @classmethod
-    def from_waveplane(
-        cls,
-        wp: WavePlane,
-    ):
+    def from_waveplane(cls, wp: WavePlane):
         spec, kx, ky, f = welch_3d(
             wp.eta(),
             wp.time(),
             wp.y(),
             wp.x(),
-            n_seg=8,
+            nperseg=len(wp.time()) // 8,
         )
         f3d = cls(x=np.mean(wp.x()), y=np.mean(wp.y()), freq=f, kx=kx, ky=ky)
         f3d.set_spec(spec, allow_reshape=True)
+
+        start_time = pd.to_datetime(wp.time()[0])
+        f3d.set_metadata(
+            {
+                "start_time": start_time.strftime("%Y-%m-%d %H:%M"),
+                "hs_raw": wp.hs(),
+            }
+        )
         return f3d
 
     def m0(self) -> float:
