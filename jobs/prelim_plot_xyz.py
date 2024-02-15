@@ -11,7 +11,8 @@ from drq.spectra.spec2d import Fkxy, FkTheta
 # ds = xr.open_dataset("../sv_data/ekofisk/xygrid_50cm_20191209_1200_plane_sub.nc")
 ds = xr.open_dataset("../sv_data/ekofisk/xygrid_50cm_20210406_1540_plane_sub.nc")
 
-wp = WavePlane.from_ds(ds).flip_yaxis()
+wp = WavePlane.from_ds(ds, lon=2).flip_yaxis()
+wp.set_station(lon=3.21, lat=56.55)
 wp.set_box(x=(-45.0, 34.0), y=(120.0, 199.0))
 # x: tuple[float, float] = (-35.0, 25.0),
 # y: tuple[float, float] = (120.0, 180.0),

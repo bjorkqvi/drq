@@ -14,4 +14,4 @@ spec = F3D(
 )
 
 spec.set_spec(mat.get("KFspec") * 2, allow_reshape=True)
-spec.ds().sel(freq=slice(0, 10_000)).to_netcdf(f"spec_data/acqua_alta/{fn}.nc")
+spec.ds().sel(freq=slice(0.00000001, 10_000)).to_netcdf(f"spec_data/acqua_alta/{fn}.nc")

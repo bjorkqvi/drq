@@ -18,30 +18,27 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from scipy.interpolate import griddata
-
-
-class Spec2d:
-    def m0(self):
-        return self.m(moment=0)
-
-    def hs(self):
-        return 4 * np.sqrt(self.m0())
+from .attributes import SpecAttributes
 
 
 @add_datavar(name="spec")
 @add_direction()
 @add_coord(name="v")
-class QvTheta(PointSkeleton, Spec2d):
+class QvTheta(PointSkeleton, SpecAttributes):
     pass
 
 
 @add_datavar(name="spec")
 @add_coord(name="theta")
 @add_coord(name="k")
-class FkTheta(PointSkeleton, Spec2d):
+class FkTheta(PointSkeleton, SpecAttributes):
+    @classmethod
+    def from_f3d(cls, f3d: F3D) -> FkTheta:
+        return cls.from_fkxy(Fkxy.from_f3d(f3d))
+
     @classmethod
     def from_fkxy(cls, fkxy: Fkxy) -> FkTheta:
-        dk = np.median(np.diff(fkxy.kx()))
+        dk = 2 * np.pi / 80
 
         kx, ky = np.meshgrid(fkxy.kx(), fkxy.ky())
         kxy = (kx**2 + ky**2) ** 0.5
@@ -50,20 +47,21 @@ class FkTheta(PointSkeleton, Spec2d):
         theta[mask] = theta[mask] + 2 * np.pi
 
         theta_vec = np.deg2rad(np.arange(0, 360, 5))
-        k_vec = np.arange(dk, np.max(fkxy.kx()), dk)
+        # k_vec = np.arange(dk, np.max(fkxy.kx()), dk)
+        k_vec = np.arange(0.01, 7, dk)
         theta_grid, k_grid = np.meshgrid(
             theta_vec,
             k_vec,
         )
-
+        spec_data = fkxy.spec()
         spec = griddata(
             (theta.ravel(), kxy.ravel()),
-            fkxy.spec().ravel(),
+            spec_data.ravel(),
             (theta_grid, k_grid),
-            method="nearest",
+            method="linear",
         )
         spec[np.isnan(spec)] = 0
-        fktheta = cls(x=fkxy.x()[0], y=fkxy.y()[0], theta=theta_vec, k=k_vec)
+        fktheta = cls(lon=fkxy.lon(), lat=fkxy.lat(), theta=theta_vec, k=k_vec)
         fktheta.set_spec(spec, allow_reshape=True)
         return fktheta
 
@@ -85,49 +83,60 @@ class FkTheta(PointSkeleton, Spec2d):
         # ax.pcolormesh(dirs, k, np.log(self.spec(squeeze=True)))
         fig.show()
 
-    def m(self, moment: float) -> float:
-        spec = self.spec()
-        dtheta = np.median(np.diff(self.theta()))
-        k = self.k()
-        dk = np.median(np.diff(k))
-        return np.sum(np.sum(spec, 2) * dtheta * k ** (moment + 1)) * dk
+    def m(self, moment: float, method: str = "integrate") -> float:
+        if method == "integrate":
+            return (
+                np.sum(
+                    np.sum(self.spec(), 2) * self.dtheta() * self.k() ** (moment + 1)
+                )
+                * self.dk()
+            )
+        elif method == "sum":
+            return (
+                np.sum(
+                    np.sum(self.spec(), 2) * self.dtheta() * self.k() ** (moment + 1)
+                )
+                * self.dk()
+            )
+        else:
+            raise ValueError("Method should be 'integrate' (default) or 'sum'!")
 
 
-@add_datavar(name="spec")
-@add_coord(name="k")
-@add_frequency()
-class Fkf(PointSkeleton, Spec2d):
-    pass
+# @add_datavar(name="spec")
+# @add_coord(name="k")
+# @add_frequency()
+# class Fkf(PointSkeleton, SpecAttributes):
+#     @classmethod
+#     def from_fk3d(cls, f3d: F3D) -> Fkf:
+#         kx, ky = np.meshgrid(f3d.kx(), f3d.ky())
+#         kxy = (kx**2 + ky**2) ** 0.5
+#         theta = np.arctan2(kx, ky)
+#         mask = theta < 0
+#         theta[mask] = theta[mask] + 2 * np.pi
+
+#         theta_vec = np.deg2rad(np.arange(0, 360, 5))
+#         k_vec = np.arange(dk, np.max(fkxy.kx()), dk)
+#         theta_grid, k_grid = np.meshgrid(
+#             theta_vec,
+#             k_vec,
+#         )
+
+#         spec = griddata(
+#             (theta.ravel(), kxy.ravel()),
+#             fkxy.spec().ravel(),
+#             (theta_grid, k_grid),
+#             method="nearest",
+#         )
+#         spec[np.isnan(spec)] = 0
+#         fktheta = cls(lon=fkxy.lon(), lat=fkxy.lat(), theta=theta_vec, k=k_vec)
+#         fktheta.set_spec(spec, allow_reshape=True)
+#         return fktheta
 
 
 @add_datavar(name="spec")
 @add_coord(name="kx")
 @add_coord(name="ky")
-class Fkxy(PointSkeleton, Spec2d):
-    # @classmethod
-    # def from_waveplane(
-    #     cls,
-    #     ds: xr.Dataset,
-    #     x: tuple[float, float] = (-35.0, 25.0),
-    #     y: tuple[float, float] = (-180.0, -120.0),
-    # ):
-    #     ds = ds.sel(x=slice(x[0], x[1]), y=slice(y[0], y[1]))
-    #     F = np.abs(fftshift(fft2(ds.eta.values))) ** 2
-    #     Fm = np.nanmean(F, axis=0)
-    #     kx = np.linspace(
-    #         -2 * np.pi * 2.0, 2 * np.pi * 2.0, 121
-    #     )  # Wrong but close wnough for pre-implementation
-    #     spec = cls(x=np.mean(x), y=np.mean(y), kx=kx, ky=kx)
-    #     spec.set_spec(Fm / (kx[0] ** 2), allow_reshape=True)
-    #     start_time = pd.to_datetime(ds.time.values[0])
-    #     spec.set_metadata(
-    #         {
-    #             "start_time": start_time.strftime("%Y-%m-%d %H:%M"),
-    #             "hs": 4 * np.nanstd(ds.eta.values),
-    #         }
-    #     )
-    #     return spec
-
+class Fkxy(PointSkeleton, SpecAttributes):
     @classmethod
     def from_f3d(cls, f3d: F3D) -> Fkxy:
         spec_ds = f3d.ds().integrate(coord="freq")
@@ -151,5 +160,5 @@ class Fkxy(PointSkeleton, Spec2d):
 @add_datavar(name="spec")
 @add_direction()
 @add_frequency()
-class EfTheta(PointSkeleton, Spec2d):
+class EfTheta(PointSkeleton, SpecAttributes):
     pass

@@ -9,10 +9,16 @@ import cmocean.cm
 import pandas as pd
 from matplotlib.widgets import Slider, Button, RadioButtons, TextBox
 
+import xarray as xr
+
 
 @add_datavar(name="eta")
 @add_time()
 class WavePlane(GriddedSkeleton):
+    @classmethod
+    def from_netcdf(cls, filename: str) -> "F3D":
+        return cls.from_ds(xr.open_dataset(filename))
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.set_box(x=self.edges("x"), y=self.edges("y"), init=True)
@@ -30,6 +36,9 @@ class WavePlane(GriddedSkeleton):
         wp_flip.set_eta(np.flip(self.eta(), axis=1))
         wp_flip.set_box(x=self.box_x, y=np.flip(-self.box_y))
         return wp_flip
+
+    def set_station(self, lon: float, lat: float) -> None:
+        self.set_metadata({"lon": lon, "lat": lat}, append=True)
 
     def set_box(
         self, x: tuple[float, float], y: tuple[float, float], init: bool = False
