@@ -6,21 +6,37 @@ import pandas as pd
 import numpy.matlib
 
 
-def hann_3d(Nx: int, Ny: int, Nt: int) -> tuple[dict]:
+def window_1d_to_3d(winx: np.ndarray, winy: np.ndarray, wint: np.ndarray) -> np.ndarray:
+    Nx, Ny, Nt = len(winx), len(winy), len(wint)
+    winxy = np.matlib.repmat(winx, Ny, 1)
+    winyx = np.matlib.repmat(winy, Nx, 1).T
+    wintx = np.matlib.repmat(wint, Nx, 1)
+    winxyt = np.repeat(winxy[:, :, np.newaxis], Nt, axis=2)
+    winyxt = np.repeat(winyx[:, :, np.newaxis], Nt, axis=2)
+    wintxy = np.repeat(wintx[np.newaxis, :, :], Ny, axis=0)
+
+    win_3d = winxyt * winyxt * wintxy
+    return win_3d
+
+
+def hann_3d(Nx: int, Ny: int, Nt: int) -> np.ndarray:
     hannt = sp.signal.windows.hann(Nt)
     hanny = sp.signal.windows.hann(Ny)
     hannx = sp.signal.windows.hann(Nx)
 
-    hannxy = np.matlib.repmat(hannx, Ny, 1)
-    hannyx = np.matlib.repmat(hanny, Nx, 1)
-    hanntx = np.matlib.repmat(hannt, Nx, 1)
-    hannxyt = np.repeat(hannxy[:, :, np.newaxis], Nt, axis=2)
-    hannyxt = np.repeat(hannyx[:, :, np.newaxis], Nt, axis=2)
-    hanntxy = np.repeat(hanntx[np.newaxis, :, :], Ny, axis=0)
-
-    hann_3d = hannxyt * hannyxt * hanntxy
+    hann_3d = window_1d_to_3d(hannx, hanny, hannt)
 
     return hann_3d
+
+
+def tukey_3d(Nx: int, Ny: int, Nt: int) -> np.ndarray:
+    hannt = sp.signal.windows.hann(Nt)
+    tukeyy = sp.signal.windows.tukey(Ny)
+    tukeyx = sp.signal.windows.tukey(Nx)
+
+    tukey_3d = window_1d_to_3d(tukeyx, tukeyy, hannt)
+
+    return tukey_3d
 
 
 def welch_3d(
@@ -30,9 +46,12 @@ def welch_3d(
     x: np.ndarray,
     nperseg: int = 256,
     noverlap: int = None,
+    window: str = "hann",
 ):
     """Takes in surface elevation (time, y, x) and return spectrum (kx,ky,f).
-    x- and y-dimensions must be the same (i.e. a square splane)"""
+    x- and y-dimensions must be the same (i.e. a square splane)
+
+    window: 'hann' (3D hann-window) or 'tukey' (2D tukey in space and hann in time)"""
     assert len(x) == len(y)
 
     eta = eta.T
@@ -63,15 +82,19 @@ def welch_3d(
     ky = 2 * np.pi * sp.fft.fftshift(sp.fft.fftfreq(Ny, dy))
     dky = np.median(np.diff(ky))
 
-    hann = hann_3d(Nx, Ny, Nt)
+    if window == "hann":
+        window_3d = hann_3d(Nx, Ny, Nt)
+    elif window == "tukey":
+        window_3d = tukey_3d(Nx, Ny, Nt)
+
     # wc = 1 / np.mean(hann**2)
-    wc = 1 / np.sum(hann**2)
+    wc = 1 / np.sum(window_3d**2)
     # hann, wc = np.ones((gi.Nx, gi.Ny, gi.Nt)), 1
     KFspec_all = np.zeros((Nx, Ny, Nt))
     for n0 in start_inds:
         z_3d = eta[:, :, n0 : n0 + nperseg]
         z_3d[np.isnan(z_3d)] = 0
-        zw = (z_3d - np.mean(z_3d)) * hann
+        zw = (z_3d - np.mean(z_3d)) * window_3d
 
         zf = sp.fft.fftshift(sp.fft.fftn(zw))
         KFspec = (np.abs(zf) ** 2 / (dkx * dky * df) / ((Nt * Nx * Ny))) * wc
