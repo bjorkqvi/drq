@@ -34,7 +34,7 @@ class Plotting1D:
         fig, ax, return_handle = get_fig_ax(ax, return_handle)
         x = self.get(self.x_label)
         y = self.spec(squeeze=True) * x**power
-        ax.loglog(x, y)
+        ax.loglog(x, y, ".-")
         ax = self._add_text(ax)
         return return_fig_ax(fig, ax, return_handle)
 
