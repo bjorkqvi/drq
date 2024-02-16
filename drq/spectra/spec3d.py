@@ -5,11 +5,7 @@ from geo_skeletons.decorators import (
     add_coord,
 )
 import xarray as xr
-import scipy as sp
-import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
-import numpy.matlib
 
 from drq.fft_funcs import welch_3d
 from drq.waveplane.waveplane import WavePlane
@@ -28,13 +24,15 @@ class F3D(PointSkeleton, SpecAttributes):
         return cls.from_ds(xr.open_dataset(filename))
 
     @classmethod
-    def from_waveplane(cls, wp: WavePlane) -> "F3D":
+    def from_waveplane(cls, wp: WavePlane, window: str = "hann") -> "F3D":
+        """window: 'hann' (3D hann-window) or 'tukey' (2D tukey in space and hann in time)"""
         spec, kx, ky, f = welch_3d(
             wp.eta(),
             wp.time(),
             wp.y(),
             wp.x(),
             nperseg=len(wp.time()) // 8,
+            window=window,
         )
         lon, lat = wp.metadata().get("lon", 0), wp.metadata().get("lat", 0)
         f3d = cls(lon=lon, lat=lat, freq=f, kx=kx, ky=ky)
@@ -49,7 +47,7 @@ class F3D(PointSkeleton, SpecAttributes):
         )
         return f3d
 
-    def m0(self) -> float:
+    def m(self, moment: int, method: str = "integrate") -> float:
         return (
             self.spec(data_array=True)
             .integrate(coord="kx")
@@ -57,6 +55,3 @@ class F3D(PointSkeleton, SpecAttributes):
             .integrate(coord="freq")
             .values[0]
         )
-
-    def hs(self):
-        return 4 * np.sqrt(self.m0())

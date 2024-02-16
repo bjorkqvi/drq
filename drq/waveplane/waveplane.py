@@ -10,6 +10,7 @@ import pandas as pd
 from matplotlib.widgets import Slider, Button, RadioButtons, TextBox
 
 import xarray as xr
+from copy import copy
 
 
 @add_datavar(name="eta")
@@ -36,6 +37,11 @@ class WavePlane(GriddedSkeleton):
         wp_flip.set_eta(np.flip(self.eta(), axis=1))
         wp_flip.set_box(x=self.box_x, y=np.flip(-self.box_y))
         return wp_flip
+
+    def detrend(self) -> "WavePlane":
+        wp_detrended = copy(self)
+        wp_detrended.set_eta(self.eta() - np.nanmean(self.eta()))
+        return wp_detrended
 
     def set_station(self, lon: float, lat: float) -> None:
         self.set_metadata({"lon": lon, "lat": lat}, append=True)
@@ -72,16 +78,21 @@ class WavePlane(GriddedSkeleton):
         )
         return cut_wp
 
-    def plot(self):
+    def plot(self, time_ind: int = 0, vmin: float = None, vmax: float = None):
         def update_plot(val):
             ax.cla()
-            ax.pcolormesh(
+            cont = ax.pcolormesh(
                 self.xgrid(),
                 self.ygrid(),
                 self.eta(data_array=True).isel(time=val),
                 cmap=cmocean.cm.diff,
+                vmin=vmin,
+                vmax=vmax,
             )
             time = pd.to_datetime(self.time()[val])
+            if self._add_cbar:
+                self._add_cbar = False
+                cbar = fig.colorbar(cont)
             ax.plot(x, [y[0], y[0]], "r", linestyle="dashed")
             ax.plot(x, [y[1], y[1]], "r", linestyle="dashed")
             ax.plot([x[0], x[0]], y, "r", linestyle="dashed")
@@ -91,6 +102,17 @@ class WavePlane(GriddedSkeleton):
             ax.set_title(time.strftime("%Y-%m-%d %H:%M:%S"))
 
         fig, ax = plt.subplots(1)
+
+        self._add_cbar = True
+
+        if vmin is None or vmax is None:
+            min_val = np.nanmin(self.eta())
+            max_val = np.nanmax(self.eta())
+            max_val = np.maximum(np.abs(min_val), np.abs(max_val))
+        if vmin is None:
+            vmin = -max_val
+        if vmax is None:
+            vmax = max_val
         x, y = self.box_x, self.box_y
         if len(self.time()) > 1:
             ax_slider = plt.axes([0.17, 0.05, 0.65, 0.03])
@@ -99,7 +121,7 @@ class WavePlane(GriddedSkeleton):
                 "time_index",
                 0,
                 len(self.time()) - 1,
-                valinit=0,
+                valinit=time_ind,
                 valstep=1,
             )
             time_slider.on_changed(update_plot)
