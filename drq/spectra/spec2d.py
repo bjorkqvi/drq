@@ -142,6 +142,60 @@ class FkTheta(PointSkeleton, SpecAttributes):
             raise ValueError("Method should be 'integrate' (default) or 'sum'!")
 
 
+@add_datavar(name="spec")
+@add_frequency()
+@add_coord(name="kx")
+class Fkxf(PointSkeleton, SpecAttributes):
+    @classmethod
+    def from_f3d(cls, f3d: F3D) -> Fkxf:
+        spec_ds = f3d.ds().sum(dim="ky") * f3d.dky()
+        return cls.from_ds(spec_ds)
+
+    def m(self, moment: float, method: str = "integrate") -> float:
+        return (
+            self.spec(data_array=True)
+            .integrate(coord="kx")
+            .integrate(coord="freq")
+            .values[0]
+        )
+
+    def plot(self):
+        fig, ax = plt.subplots()
+        kx, freq = np.meshgrid(self.kx(), self.freq())
+        ax.pcolormesh(kx, freq, np.log(self.spec(squeeze=True)))
+        ax.set_xlabel("kx [rad/m]")
+        ax.set_ylabel("freq [Hz]")
+
+        fig.show()
+
+
+@add_datavar(name="spec")
+@add_frequency()
+@add_coord(name="ky")
+class Fkyf(PointSkeleton, SpecAttributes):
+    @classmethod
+    def from_f3d(cls, f3d: F3D) -> Fkyf:
+        spec_ds = f3d.ds().sum(dim="kx") * f3d.dkx()
+        return cls.from_ds(spec_ds)
+
+    def m(self, moment: float, method: str = "integrate") -> float:
+        return (
+            self.spec(data_array=True)
+            .integrate(coord="ky")
+            .integrate(coord="freq")
+            .values[0]
+        )
+
+    def plot(self):
+        fig, ax = plt.subplots()
+        ky, freq = np.meshgrid(self.ky(), self.freq())
+        ax.pcolormesh(ky, freq, np.log(self.spec(squeeze=True)))
+        ax.set_xlabel("ky [rad/m]")
+        ax.set_ylabel("freq [Hz]")
+
+        fig.show()
+
+
 # @add_datavar(name="spec")
 # @add_coord(name="k")
 # @add_frequency()

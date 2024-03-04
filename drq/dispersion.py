@@ -60,13 +60,43 @@ def wavelength(T: float, depth: float = 10_000) -> float:
     return 2 * np.pi / k
 
 
+def inverse_phase_speed(
+    f: float = None,
+    T: float = None,
+    w: float = None,
+    k: float = None,
+    depth: float = 10_000,
+):
+    """Calculates the inverse wave phase speed using linear theory"""
+    if k is not None:
+        kh = k * depth
+        kh = np.minimum(kh, 2 * np.pi)
+        tanhkh = np.tanh(kh)
+        tanhkh[np.abs(tanhkh) < 0.0001] = np.nan
+        v = np.sqrt(k / g / tanhkh)
+        v = v * np.sign(k)
+        v[np.isnan(v)] = 0
+        return v
+    w = get_w(f, T, w)
+    w, depth = sanitize_input(w, depth)
+    k = wavenumber(w, depth=depth)
+
+    return k / w
+
+
 def phase_speed(
     f: float = None,
     T: float = None,
     w: float = None,
+    k: float = None,
     depth: float = 10_000,
 ):
     """Calculates the wave phase speed using linear theory"""
+    if k is not None:
+        kh = k * depth
+        kh = np.minimum(kh, 2 * np.pi)
+        return np.sqrt(g / k * np.tanh(kh))
+
     w = get_w(f, T, w)
     w, depth = sanitize_input(w, depth)
     k = wavenumber(w, depth=depth)

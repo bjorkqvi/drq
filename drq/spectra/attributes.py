@@ -2,6 +2,12 @@ import numpy as np
 
 
 class SpecAttributes:
+    def get_name(self) -> str:
+        if self.name == "LonelySkeleton":
+            return type(self).__name__
+        else:
+            return self.name
+
     def m0(self, method: str = "integrate"):
         return self.m(moment=0, method=method)
 

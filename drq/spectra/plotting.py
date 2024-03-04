@@ -13,6 +13,7 @@ def get_fig_ax(ax, return_handle):
 
 def return_fig_ax(fig, ax, return_handle):
     if not return_handle:
+        ax.legend()
         fig.show()
         return None
     elif fig is None:
@@ -21,12 +22,20 @@ def return_fig_ax(fig, ax, return_handle):
         return fig, ax
 
 
+def plot(spectra: list, ax=None, return_handle: bool = False):
+    fig, ax, return_handle = get_fig_ax(ax, return_handle)
+    for spec in spectra:
+        ax = spec.plot(ax)
+
+    return return_fig_ax(fig, ax, return_handle)
+
+
 class Plotting1D:
     def plot(self, ax=None, power: float = 0.0, return_handle: bool = False):
         fig, ax, return_handle = get_fig_ax(ax, return_handle)
         x = self.get(self.x_label)
         y = self.spec(squeeze=True) * x**power
-        ax.plot(x, y)
+        ax.plot(x, y, label=self.get_name())
         ax = self._add_text(ax)
         return return_fig_ax(fig, ax, return_handle)
 
@@ -34,7 +43,7 @@ class Plotting1D:
         fig, ax, return_handle = get_fig_ax(ax, return_handle)
         x = self.get(self.x_label)
         y = self.spec(squeeze=True) * x**power
-        ax.loglog(x, y, ".-")
+        ax.loglog(x, y, ".-", label=self.get_name())
         ax = self._add_text(ax)
         return return_fig_ax(fig, ax, return_handle)
 
