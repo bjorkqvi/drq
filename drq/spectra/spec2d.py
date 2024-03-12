@@ -16,23 +16,28 @@ import scipy as sp
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import cmocean.cm
 from scipy.interpolate import griddata
 from .attributes import SpecAttributes
 import matplotlib.pyplot as plt
+from drq.dispersion import wavenumber
+
+
+class Spectrum2D(PointSkeleton, SpecAttributes):
+    pass
 
 
 @add_datavar(name="spec")
 @add_direction()
 @add_coord(name="v")
-class QvTheta(PointSkeleton, SpecAttributes):
+class QvTheta(Spectrum2D):
     pass
 
 
 @add_datavar(name="spec")
 @add_coord(name="theta")
 @add_coord(name="k")
-class FkTheta(PointSkeleton, SpecAttributes):
+class FkTheta(Spectrum2D):
     @classmethod
     def from_f3d(cls, f3d: F3D) -> FkTheta:
         return cls.from_fkxy(Fkxy.from_f3d(f3d))
@@ -145,7 +150,7 @@ class FkTheta(PointSkeleton, SpecAttributes):
 @add_datavar(name="spec")
 @add_frequency()
 @add_coord(name="kx")
-class Fkxf(PointSkeleton, SpecAttributes):
+class Fkxf(Spectrum2D):
     @classmethod
     def from_f3d(cls, f3d: F3D) -> Fkxf:
         spec_ds = f3d.ds().sum(dim="ky") * f3d.dky()
@@ -172,7 +177,7 @@ class Fkxf(PointSkeleton, SpecAttributes):
 @add_datavar(name="spec")
 @add_frequency()
 @add_coord(name="ky")
-class Fkyf(PointSkeleton, SpecAttributes):
+class Fkyf(Spectrum2D):
     @classmethod
     def from_f3d(cls, f3d: F3D) -> Fkyf:
         spec_ds = f3d.ds().sum(dim="kx") * f3d.dkx()
@@ -244,14 +249,36 @@ class Fkxy(PointSkeleton, SpecAttributes):
             .values[0]
         )
 
-    def plot(self):
-        fig, ax = plt.subplots()
+    def plot(self, ax=None, fig=None, log=True, vmin=None, vmax=None, cbar=True):
+        if ax is None:
+            fig, ax = plt.subplots()
+            show_fig = True
+        else:
+            show_fig = False
         kx, ky = np.meshgrid(self.kx(), self.ky())
-        ax.pcolormesh(kx, ky, np.log(self.spec(squeeze=True)))
+        spec = self.spec(squeeze=True)
+        if vmin is None:
+            vmin = np.log(np.nanmin(spec))
+        if vmax is None:
+            vmax = np.log(np.nanmax(spec))
+
+        if log:
+            spec = np.log(spec)
+            vmin = np.log(vmin)
+            vmax = np.log(vmax)
+        cont = ax.pcolormesh(kx, ky, spec, cmap=cmocean.cm.haline, vmin=vmin, vmax=vmax)
+        if cbar:
+            fig.colorbar(cont)
         ax.set_xlabel("kx [rad/m]")
         ax.set_ylabel("ky [rad/m]")
+        if hasattr(self.ds(), "freq"):
 
-        fig.show()
+            ax.set_title(f"f = {self.ds().freq:.5f}")
+            k_lin = wavenumber(2 * np.pi * self.ds().freq)
+            theta = np.linspace(0, 2 * np.pi, 36)
+            ax.plot(np.cos(theta) * k_lin, np.sin(theta) * k_lin, "--k")
+        if show_fig:
+            fig.show()
 
 
 @add_datavar(name="spec")

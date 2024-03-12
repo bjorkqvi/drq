@@ -7,48 +7,62 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cmocean.cm
 import pandas as pd
-from matplotlib.widgets import Slider, Button, RadioButtons, TextBox
+from matplotlib.widgets import Slider
 
 import xarray as xr
-from copy import copy
+from copy import deepcopy
 
 
 @add_datavar(name="eta")
 @add_time()
 class WavePlane(GriddedSkeleton):
     @classmethod
-    def from_netcdf(cls, filename: str) -> "F3D":
+    def from_netcdf(cls, filename: str) -> "WavePlane":
         return cls.from_ds(xr.open_dataset(filename))
+
+    @classmethod
+    def from_ekofisk(cls, filename: str) -> "WavePlane":
+        """Reads netcdf file of Ekofisk data and applies station specific settings"""
+        wp = cls.from_netcdf(filename).flip_yaxis().detrend()
+        wp.set_station(lon=3.21, lat=56.55)
+        wp.set_box(x=(-45.0, 34.0), y=(120.0, 199.0))
+        return wp.cut_to_box()
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.set_box(x=self.edges("x"), y=self.edges("y"), init=True)
 
-    def xgrid(self):
+    def xgrid(self) -> np.ndarray:
+        """Returns a meshgrid of x-values"""
         X, _ = np.meshgrid(self.x(), self.y())
         return X
 
-    def ygrid(self):
+    def ygrid(self) -> np.ndarray:
+        """Returns a meshgrid of y-values"""
         _, Y = np.meshgrid(self.x(), self.y())
         return Y
 
     def flip_yaxis(self) -> "WavePlane":
+        """Flips the y-axis values fron positive to negative (or vice versa)"""
         wp_flip = WavePlane(x=self.x(), y=np.flip(-self.y()), time=self.time())
         wp_flip.set_eta(np.flip(self.eta(), axis=1))
-        wp_flip.set_box(x=self.box_x, y=np.flip(-self.box_y))
+        wp_flip.set_box(x=self.box_x, y=np.flip(-self.box_y), init=True)
         return wp_flip
 
     def detrend(self) -> "WavePlane":
-        wp_detrended = copy(self)
+        """Removes the mean of the data from all surfaes"""
+        wp_detrended = deepcopy(self)
         wp_detrended.set_eta(self.eta() - np.nanmean(self.eta()))
         return wp_detrended
 
     def set_station(self, lon: float, lat: float) -> None:
+        """Sets longitude and latitue of station that data is from"""
         self.set_metadata({"lon": lon, "lat": lat}, append=True)
 
     def set_box(
         self, x: tuple[float, float], y: tuple[float, float], init: bool = False
     ):
+        """Sets the box to mark data of interest"""
         x = np.atleast_1d(x)
         y = np.atleast_1d(y)
 
@@ -68,10 +82,12 @@ class WavePlane(GriddedSkeleton):
                 print("Box is not a square!")
 
     def box_squared(self) -> bool:
+        """Checks if the set box is squared"""
         x, y = self.box_x, self.box_y
         return np.isclose(np.abs(y[1] - y[0]), np.abs(x[1] - x[0]))
 
     def cut_to_box(self) -> "WavePlane":
+        "Cuts the WavePlane to the ser box"
         x, y = self.box_x, self.box_y
         cut_wp = WavePlane.from_ds(
             self.ds().sel(x=slice(np.min(x), np.max(x)), y=slice(np.min(y), np.max(y)))
@@ -79,6 +95,8 @@ class WavePlane(GriddedSkeleton):
         return cut_wp
 
     def plot(self, time_ind: int = 0, vmin: float = None, vmax: float = None):
+        """Plots the surface data with a slider as a function of time"""
+
         def update_plot(val):
             ax.cla()
             cont = ax.pcolormesh(
@@ -129,10 +147,6 @@ class WavePlane(GriddedSkeleton):
         update_plot(0)
 
         plt.show(block=True)
-
-        #
-
-        # fig.show()
 
     def m0(self, nan_to_zero: bool = True):
         eta = self.eta()

@@ -1,22 +1,21 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from .spec3d import F3D
-
+from .spec2d import FkTheta, Fkxy, Fkxf, Fkyf
 from geo_skeletons import PointSkeleton
 from geo_skeletons.decorators import (
     add_datavar,
     add_frequency,
     add_coord,
 )
+from .spec3d import F3D
 import xarray as xr
 import scipy as sp
 import numpy as np
 import matplotlib.pyplot as plt
-from drq.spectra.spec2d import FkTheta, Fkxy, Fkxf, Fkyf
-import pandas as pd
 
+import pandas as pd
+from copy import deepcopy
 from drq import dispersion
 
 from drq.waveplane.waveplane import WavePlane
@@ -27,9 +26,13 @@ from .plotting import Plotting1D
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
 
 
+class Spectrum1D(PointSkeleton, SpecAttributes, Plotting1D):
+    pass
+
+
 @add_datavar(name="spec")
 @add_frequency()
-class Ef(PointSkeleton, SpecAttributes, Plotting1D):
+class Ef(Spectrum1D):
     x_label = "freq"
     y_label = "E(f)"
     x_unit = "Hz"
@@ -37,23 +40,7 @@ class Ef(PointSkeleton, SpecAttributes, Plotting1D):
 
     @classmethod
     def from_waveplane(cls, wp: WavePlane) -> Ef:
-        ts = wp.ds().interpolate_na(dim="time")
-        dt = int(np.mean(np.diff(ts.time))) / 1_000_000_000
-        n_seg = 8
-        f, E = sp.signal.welch(
-            np.squeeze(ts.eta.values), fs=1 / dt, nperseg=len(ts.eta) // n_seg
-        )
-        lon, lat = wp.metadata().get(lon, 0), wp.metadata().get(lat, 0)
-        spec = cls(lon=lon, lat=lat, freq=f[1:])
-        spec.set_spec(E[1:], allow_reshape=True)
-        start_time = pd.to_datetime(ts.time.values[0])
-        spec.set_metadata(
-            {
-                "start_time": start_time.strftime("%Y-%m-%d %H:%M"),
-                "hs_raw": 4 * np.std(ts.eta.values),
-            }
-        )
-        return spec
+        return cls.from_f3d(F3D.from_waveplane(wp))
 
     @classmethod
     def from_f3d(cls, f3d: F3D) -> Ef:
@@ -77,7 +64,7 @@ class Ef(PointSkeleton, SpecAttributes, Plotting1D):
 
 @add_datavar(name="spec")
 @add_coord(name="k")
-class Fk(PointSkeleton, SpecAttributes, Plotting1D):
+class Fk(Spectrum1D):
     x_label = "k"
     y_label = "F(k)"
     y_unit = "m^3"
@@ -130,7 +117,7 @@ class Fk(PointSkeleton, SpecAttributes, Plotting1D):
 
 @add_datavar(name="spec")
 @add_coord(name="kx")
-class Fkx(PointSkeleton, SpecAttributes, Plotting1D):
+class Fkx(Spectrum1D):
     x_label = "kx"
     y_label = "Fx(k)"
     y_unit = "m^3"
@@ -138,7 +125,13 @@ class Fkx(PointSkeleton, SpecAttributes, Plotting1D):
 
     @classmethod
     def from_fkxy(cls, fkxy: Fkxy) -> Fkx:
-        spec_ds = fkxy.ds().sum(dim="ky") * fkxy.dky()
+        XX, YY = np.meshgrid(fkxy.kx(), fkxy.ky())
+        theta = np.arctan2(YY, XX)
+        fkxy2 = deepcopy(fkxy)
+        fkxy2.set_spec(
+            fkxy.spec(squeeze=True) * np.abs(np.cos(theta)), allow_reshape=True
+        )
+        spec_ds = fkxy2.ds().sum(dim="ky") * fkxy2.dky()
         return cls.from_ds(spec_ds)
 
     @classmethod
@@ -168,7 +161,7 @@ class Fkx(PointSkeleton, SpecAttributes, Plotting1D):
 
 @add_datavar(name="spec")
 @add_coord(name="ky")
-class Fky(PointSkeleton, SpecAttributes, Plotting1D):
+class Fky(Spectrum1D):
     x_label = "ky"
     y_label = "Fy(k)"
     y_unit = "m^3"
@@ -176,7 +169,13 @@ class Fky(PointSkeleton, SpecAttributes, Plotting1D):
 
     @classmethod
     def from_fkxy(cls, fkxy) -> Fkx:
-        spec_ds = fkxy.ds().sum(dim="kx") * fkxy.dkx()
+        XX, YY = np.meshgrid(fkxy.kx(), fkxy.ky())
+        theta = np.arctan2(YY, XX)
+        fkxy2 = deepcopy(fkxy)
+        fkxy2.set_spec(
+            fkxy.spec(squeeze=True) * np.abs(np.sin(theta)), allow_reshape=True
+        )
+        spec_ds = fkxy2.ds().sum(dim="kx") * fkxy2.dkx()
         return cls.from_ds(spec_ds)
 
     @classmethod
@@ -206,7 +205,7 @@ class Fky(PointSkeleton, SpecAttributes, Plotting1D):
 
 @add_datavar(name="spec")
 @add_coord(name="vx")
-class Qvx(PointSkeleton, SpecAttributes, Plotting1D):
+class Qvx(Spectrum1D):
     x_label = "vx"
     y_label = "Qx(v)"
     y_unit = "m^3/s"
@@ -274,7 +273,7 @@ class Qvx(PointSkeleton, SpecAttributes, Plotting1D):
 
 @add_datavar(name="spec")
 @add_coord(name="vy")
-class Qvy(PointSkeleton, SpecAttributes, Plotting1D):
+class Qvy(Spectrum1D):
     x_label = "vy"
     y_label = "Qy(v)"
     y_unit = "m^3/s"
@@ -342,7 +341,7 @@ class Qvy(PointSkeleton, SpecAttributes, Plotting1D):
 
 @add_datavar(name="spec")
 @add_coord(name="v")
-class Qv(PointSkeleton, SpecAttributes, Plotting1D):
+class Qv(Spectrum1D):
     x_label = "v"
     y_label = "Q(v)"
     y_unit = "m^3/s"
