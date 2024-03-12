@@ -101,6 +101,7 @@ class Fk(PointSkeleton, SpecAttributes, Plotting1D):
 
     @classmethod
     def from_ef(cls, ef: Ef):
+        print(f"Using linear dispersion to convert f -> k!!!")
         k = dispersion.wavenumber(w=ef.freq(angular=True))
         cg = dispersion.group_speed(f=ef.freq())
         F = cg * ef.spec() / 2 / np.pi
@@ -109,6 +110,7 @@ class Fk(PointSkeleton, SpecAttributes, Plotting1D):
         spec.set_spec(F, allow_reshape=True)
         # start_time = ef.ds().start_time
         # spec.set_metadata({"start_time": start_time, "hs": ef.ds().hs})
+        spec.name = spec.get_name() + "_linear"
         return spec
 
     def m(self, moment: float, method: str = "integrate") -> float:
@@ -258,6 +260,7 @@ class Qvx(PointSkeleton, SpecAttributes, Plotting1D):
         qvx.set_spec(spec, allow_reshape=True)
         # start_time = ef.ds().start_time
         # qvx.set_metadata({"start_time": start_time, "hs": ef.ds().hs})
+        qvx.name = qvx.get_name() + "_linear"
         return qvx
 
     def m(self, moment: float, method: str = "integrate") -> float:
@@ -321,6 +324,7 @@ class Qvy(PointSkeleton, SpecAttributes, Plotting1D):
         qvy.set_spec(spec, allow_reshape=True)
         # start_time = ef.ds().start_time
         # qvx.set_metadata({"start_time": start_time, "hs": ef.ds().hs})
+        qvy.name = qvy.get_name() + "_linear"
         return qvy
 
     @classmethod
@@ -355,6 +359,7 @@ class Qv(PointSkeleton, SpecAttributes, Plotting1D):
         spec.set_spec(Q, allow_reshape=True)
         start_time = ef.ds().start_time
         spec.set_metadata({"start_time": start_time, "hs": ef.ds().hs})
+        spec.name = spec.get_name() + "_linear"
         return spec
 
     @classmethod
@@ -374,6 +379,7 @@ class Qv(PointSkeleton, SpecAttributes, Plotting1D):
         qv.set_spec(spec, allow_reshape=True)
         # start_time = ef.ds().start_time
         # qvx.set_metadata({"start_time": start_time, "hs": ef.ds().hs})
+        qv.name = qv.get_name() + "_linear"
         return qv
 
     def m(self, moment: float, method: str = "integrate") -> float:
