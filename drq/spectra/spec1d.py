@@ -52,7 +52,7 @@ class Ef(Spectrum1D):
             return (
                 (self.spec(data_array=True) * self.freq() ** moment)
                 .integrate(coord="freq")
-                .values[0]
+                .values
             )
         elif method == "sum":
             return (self.spec(data_array=True) * self.freq() ** moment).sum(
@@ -94,7 +94,7 @@ class Fk(Spectrum1D):
         F = cg * ef.spec() / 2 / np.pi
 
         spec = cls(lon=ef.lon(), lat=ef.lat(), k=k)
-        spec.set_spec(F, allow_reshape=True)
+        spec.set_spec(F)
         # start_time = ef.ds().start_time
         # spec.set_metadata({"start_time": start_time, "hs": ef.ds().hs})
         spec.name = spec.get_name() + "_linear"
@@ -128,9 +128,7 @@ class Fkx(Spectrum1D):
         XX, YY = np.meshgrid(fkxy.kx(), fkxy.ky())
         theta = np.arctan2(YY, XX)
         fkxy2 = deepcopy(fkxy)
-        fkxy2.set_spec(
-            fkxy.spec(squeeze=True) * np.abs(np.cos(theta)), allow_reshape=True
-        )
+        fkxy2.set_spec(fkxy.spec() * np.abs(np.cos(theta)))
         spec_ds = fkxy2.ds().sum(dim="ky") * fkxy2.dky()
         return cls.from_ds(spec_ds)
 
@@ -213,7 +211,7 @@ class Qvx(Spectrum1D):
 
     @classmethod
     def from_fkxf(cls, fkxf: Fkxf, method: str = "bin") -> Qvx:
-        spec = fkxf.spec(squeeze=True) / 2 / np.pi
+        spec = fkxf.spec() / 2 / np.pi
         wvec, kxvec = fkxf.freq(angular=True), fkxf.kx()
         # interp = RegularGridInterpolator((kxvec, wvec), spec, bounds_error=False)
 
@@ -235,7 +233,7 @@ class Qvx(Spectrum1D):
             y=fkxf.y(strict=True),
             vx=vx,
         )
-        qvx.set_spec(qspec, allow_reshape=True)
+        qvx.set_spec(qspec)
         return qvx
 
     @classmethod
@@ -247,7 +245,7 @@ class Qvx(Spectrum1D):
         print(f"Using linear dispersion to convert kx -> vx!!!")
         vx = dispersion.inverse_phase_speed(k=fkx.kx())
         jacobian = 2 * np.sqrt(9.81 * np.abs(fkx.kx()))  # dk/dv
-        spec = jacobian * fkx.spec(squeeze=True)
+        spec = jacobian * fkx.spec()
 
         qvx = cls(
             lon=fkx.lon(strict=True),
@@ -256,7 +254,7 @@ class Qvx(Spectrum1D):
             y=fkx.y(strict=True),
             vx=vx,
         )
-        qvx.set_spec(spec, allow_reshape=True)
+        qvx.set_spec(spec)
         # start_time = ef.ds().start_time
         # qvx.set_metadata({"start_time": start_time, "hs": ef.ds().hs})
         qvx.name = qvx.get_name() + "_linear"
@@ -281,7 +279,7 @@ class Qvy(Spectrum1D):
 
     @classmethod
     def from_fkxf(cls, fkyf: Fkyf, method: str = "bin") -> Qvy:
-        spec = fkyf.spec(squeeze=True) / 2 / np.pi
+        spec = fkyf.spec() / 2 / np.pi
         wvec, kyvec = fkyf.freq(angular=True), fkyf.kx()
         # interp = RegularGridInterpolator((kyvec, wvec), spec, bounds_error=False)
 
@@ -303,7 +301,7 @@ class Qvy(Spectrum1D):
             y=fkyf.y(strict=True),
             vy=vy,
         )
-        qvy.set_spec(qspec, allow_reshape=True)
+        qvy.set_spec(qspec)
         return qvy
 
     @classmethod
@@ -311,7 +309,7 @@ class Qvy(Spectrum1D):
         print(f"Using linear dispersion to convert ky -> vy!!!")
         vy = dispersion.inverse_phase_speed(k=fky.ky())
         jacobian = 2 * np.sqrt(9.81 * np.abs(fky.ky()))  # dk/dv
-        spec = jacobian * fky.spec(squeeze=True)
+        spec = jacobian * fky.spec()
 
         qvy = cls(
             lon=fky.lon(strict=True),
@@ -320,7 +318,7 @@ class Qvy(Spectrum1D):
             y=fky.y(strict=True),
             vy=vy,
         )
-        qvy.set_spec(spec, allow_reshape=True)
+        qvy.set_spec(spec)
         # start_time = ef.ds().start_time
         # qvx.set_metadata({"start_time": start_time, "hs": ef.ds().hs})
         qvy.name = qvy.get_name() + "_linear"
@@ -355,7 +353,7 @@ class Qv(Spectrum1D):
         Q = 9.81 * ef.spec() / 2 / np.pi  # dw/dv = g
 
         spec = cls(x=ef.x(), y=ef.y(), v=1 / c)
-        spec.set_spec(Q, allow_reshape=True)
+        spec.set_spec(Q)
         start_time = ef.ds().start_time
         spec.set_metadata({"start_time": start_time, "hs": ef.ds().hs})
         spec.name = spec.get_name() + "_linear"
@@ -366,7 +364,7 @@ class Qv(Spectrum1D):
         print(f"Using linear dispersion to convert k -> v!!!")
         v = dispersion.inverse_phase_speed(k=fk.k())
         jacobian = 2 * np.sqrt(9.81 * fk.k())  # dk/dv
-        spec = jacobian * fk.spec(squeeze=True)
+        spec = jacobian * fk.spec()
 
         qv = cls(
             lon=fk.lon(strict=True),
@@ -375,7 +373,7 @@ class Qv(Spectrum1D):
             y=fk.y(strict=True),
             v=v,
         )
-        qv.set_spec(spec, allow_reshape=True)
+        qv.set_spec(spec)
         # start_time = ef.ds().start_time
         # qvx.set_metadata({"start_time": start_time, "hs": ef.ds().hs})
         qv.name = qv.get_name() + "_linear"

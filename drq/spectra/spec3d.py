@@ -1,4 +1,4 @@
-from geo_skeletons import PointSkeleton
+from skeletons.geo_skeletons import PointSkeleton
 from geo_skeletons.decorators import (
     add_datavar,
     add_frequency,
@@ -18,7 +18,7 @@ from drq.dispersion import wavenumber
 from matplotlib.widgets import Slider, Button, RadioButtons, TextBox
 
 import matplotlib.pyplot as plt
-
+from drq import msg
 
 @add_datavar(name="spec")
 @add_frequency()
@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 class F3D(PointSkeleton, SpecAttributes):
     @classmethod
     def from_netcdf(cls, filename: str) -> "F3D":
-        return cls.from_ds(xr.open_dataset(filename))
+        return cls.from_ds(xr.open_dataset(filename, chunks="auto"))
 
     @classmethod
     def from_waveplane(cls, wp: WavePlane, window: str = "hann") -> "F3D":
@@ -35,26 +35,73 @@ class F3D(PointSkeleton, SpecAttributes):
 
         window: 'hann' (3D hann-window) or 'tukey' (2D tukey in space and hann in time)
         """
+        msg.start("Calculating 3D spectrum from WavePlane")
+        nperseg = len(wp.time()) // 8
+        msg.plain(
+            f'{f" Welch method (window = '{window}', points/segment = {nperseg}) ":-^80}'
+        )
         spec, kx, ky, f = welch_3d(
             wp.eta(),
             wp.time(),
             wp.y(),
             wp.x(),
-            nperseg=len(wp.time()) // 8,
+            nperseg=nperseg,
             window=window,
         )
+
         lon, lat = wp.metadata().get("lon", 0), wp.metadata().get("lat", 0)
         f3d = cls(lon=lon, lat=lat, freq=f, kx=kx, ky=ky)
-        f3d.set_spec(spec, allow_reshape=True)
+        f3d.set_spec(spec)
+
+        msg.middle('Setting metadata')
+        # print("Hs from WavePlane for metadata (takes time do decode dask-array)...")
+        # hs_raw = np.around(wp.hs(dask=False), 2)
+        # print(f"{hs_raw}m")
 
         start_time = pd.to_datetime(wp.time()[0])
-        f3d.set_metadata(
-            {
+        metadata = wp.metadata().copy()
+        if metadata.get("lon") is not None:
+            del metadata["lon"]
+        if metadata.get("lat") is not None:
+            del metadata["lat"]
+        f3d.set_metadata(metadata)
+        msg.plain(metadata)
+        T = (wp.time()[-1] - wp.time()[0]).seconds / 60
+        dx = np.diff(wp.edges("x"))[0]
+        dy = np.diff(wp.edges("y"))[0]
+        fs = 10**9 / np.mean(np.diff(wp.time())).astype(int)
+        new_metadata =  {
                 "start_time": start_time.strftime("%Y-%m-%d %H:%M"),
-                "hs_raw": wp.hs(),
+                # "hs_raw": hs_raw,
+                "duration_min": np.around(T, 1),
+                "dx_m": dx,
+                "dy_m": dy,
+                "sampling_freq_Hz": fs,
             }
+        msg.plain(new_metadata)
+        f3d.set_metadata(
+           new_metadata,
+            append=True,
         )
+        msg.stop()
         return f3d
+
+    def to_netcdf(self, filename: str = None) -> None:
+        """Writes 3D spectral data to netcdf.
+        Default filename: 'F3D_{station}_{start_time}_{dt}min_{dx}m_{dy}m.nc'"""
+        if filename is None:
+            station = self.metadata().get("station", "")
+            station += "_"
+            T = (self.time()[-1] - self.time()[0]).seconds / 60
+            dx = np.diff(self.edges("x"))[0]
+            dy = np.diff(self.edges("y"))[0]
+            df = 10**9 / np.mean(np.diff(self.time())).astype(int)
+            filename = f"WASS_{station}{self.time()[0]:%Y%m%d_%H%M}_{T:.0f}min_{df:.1f}Hz_{dx}m_{dy}m.nc"
+
+        msg.start('Writing to file')
+        msg.plain(filename)
+        self.ds().to_netcdf(filename)
+        msg.stop()
 
     def slice(self, method="nearest", **kwargs):
         """Slices the 3D spectrum in frequency"""
@@ -82,7 +129,6 @@ class F3D(PointSkeleton, SpecAttributes):
                 self._add_cbar = False
 
         fig, ax = plt.subplots(1)
-
         self._add_cbar = True
 
         if vmin is None:
@@ -112,7 +158,7 @@ class F3D(PointSkeleton, SpecAttributes):
                 .integrate(coord="kx")
                 .integrate(coord="ky")
                 .integrate(coord="freq")
-                .values[0]
+                .values
             )
         elif method == "sum":
             return np.sum(self.spec()) * self.dkx() * self.dky() * self.df()

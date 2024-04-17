@@ -1,4 +1,4 @@
-from geo_skeletons import GriddedSkeleton
+from skeletons.geo_skeletons import GriddedSkeleton
 from geo_skeletons.decorators import (
     add_datavar,
     add_time,
@@ -12,51 +12,55 @@ from matplotlib.widgets import Slider
 import xarray as xr
 from copy import deepcopy
 
+from drq import msg
+
 
 @add_datavar(name="eta")
 @add_time()
 class WavePlane(GriddedSkeleton):
     @classmethod
     def from_netcdf(cls, filename: str) -> "WavePlane":
-        return cls.from_ds(xr.open_dataset(filename))
+        with xr.open_dataset(filename, chunks="auto") as ds:
+            wp = cls.from_ds(ds)
+        return wp
 
-    @classmethod
-    def from_ekofisk(cls, filename: str) -> "WavePlane":
-        """Reads netcdf file of Ekofisk data and applies station specific settings"""
-        wp = cls.from_netcdf(filename).flip_yaxis().detrend()
-        wp.set_station(lon=3.21, lat=56.55)
-        wp.set_box(x=(-45.0, 34.0), y=(120.0, 199.0))
-        return wp.cut_to_box()
+    def to_netcdf(self, filename: str = None) -> None:
+        """Writes WASS data to netcdf.
+        Default filename: 'WASS_{station}_{start_time}_{dt}min_{dx}m_{dy}m.nc'"""
+        if filename is None:
+            station = self.metadata().get("station", "")
+            station += "_"
+            T = self.time()[-1] - self.time()[0]
+            dx = np.diff(self.edges("x"))[0]
+            dy = np.diff(self.edges("y"))[0]
+            df = 10**9 / np.mean(np.diff(self.time())).astype(int)
+            filename = f"WASS_{station}{self.time()[0]:%Y%m%d_%H%M}_{T.seconds/60:.0f}min_{df:.1f}Hz_{dx}m_{dy}m.nc"
+
+        msg.start("Writing to file")
+        msg.plain(filename)
+        self.ds().to_netcdf(filename)
+        msg.stop()
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.set_box(x=self.edges("x"), y=self.edges("y"), init=True)
 
-    def xgrid(self) -> np.ndarray:
-        """Returns a meshgrid of x-values"""
-        X, _ = np.meshgrid(self.x(), self.y())
-        return X
-
-    def ygrid(self) -> np.ndarray:
-        """Returns a meshgrid of y-values"""
-        _, Y = np.meshgrid(self.x(), self.y())
-        return Y
-
-    def flip_yaxis(self) -> "WavePlane":
+    def flip_yaxis(self) -> None:
         """Flips the y-axis values fron positive to negative (or vice versa)"""
-        wp_flip = WavePlane(x=self.x(), y=np.flip(-self.y()), time=self.time())
-        wp_flip.set_eta(np.flip(self.eta(), axis=1))
-        wp_flip.set_box(x=self.box_x, y=np.flip(-self.box_y), init=True)
-        return wp_flip
+        msg.plain("Flipping y-axis...")
+        self.ds()["y"] = np.flip(-self.y())
+        self.set_eta(np.flip(self.eta(), axis=1))
+        self.set_box(x=self.box_x, y=np.flip(-self.box_y), init=True)
 
-    def detrend(self) -> "WavePlane":
+    def detrend(self) -> None:
         """Removes the mean of the data from all surfaes"""
-        wp_detrended = deepcopy(self)
-        wp_detrended.set_eta(self.eta() - np.nanmean(self.eta()))
-        return wp_detrended
+        msg.plain("Detrending by removing mean value...")
+        mean = np.nanmean(self.eta())
+        self.set_eta(self.eta() - mean)
 
     def set_station(self, lon: float, lat: float) -> None:
         """Sets longitude and latitue of station that data is from"""
+        msg.plain(f"Setting station: lon = {lon}, lat = {lat}")
         self.set_metadata({"lon": lon, "lat": lat}, append=True)
 
     def set_box(
@@ -74,12 +78,12 @@ class WavePlane(GriddedSkeleton):
         self.box_y = np.array(y)
 
         if not init:
-            print(
+            msg.plain(
                 f"Setting box: x = {x[0]}-{x[1]} ({x[1]-x[0]} m), x = {y[0]}-{y[1]} ({y[1]-y[0]} m)"
             )
 
             if not self.box_squared():
-                print("Box is not a square!")
+                msg.plain("Box is not a square!")
 
     def box_squared(self) -> bool:
         """Checks if the set box is squared"""
@@ -148,13 +152,13 @@ class WavePlane(GriddedSkeleton):
 
         plt.show(block=True)
 
-    def m0(self, nan_to_zero: bool = True):
-        eta = self.eta()
+    def m0(self, nan_to_zero: bool = True, dask: bool = True):
+        eta = self.eta(dask=dask)
         if nan_to_zero:
             eta[np.isnan(eta)] = 0
             return np.var(eta)
         else:
             return np.nanvar(eta)
 
-    def hs(self, nan_to_zero: bool = True):
-        return 4 * np.sqrt(self.m0(nan_to_zero=nan_to_zero))
+    def hs(self, nan_to_zero: bool = True, dask: bool = True):
+        return 4 * np.sqrt(self.m0(nan_to_zero=nan_to_zero, dask=dask))

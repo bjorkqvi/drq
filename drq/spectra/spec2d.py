@@ -21,6 +21,7 @@ from scipy.interpolate import griddata
 from .attributes import SpecAttributes
 import matplotlib.pyplot as plt
 from drq.dispersion import wavenumber
+from drq import msg
 
 
 class Spectrum2D(PointSkeleton, SpecAttributes):
@@ -40,34 +41,45 @@ class QvTheta(Spectrum2D):
 class FkTheta(Spectrum2D):
     @classmethod
     def from_f3d(cls, f3d: F3D) -> FkTheta:
-        return cls.from_fkxy(Fkxy.from_f3d(f3d))
+        """Takes in a 3D-spectrum and integrates to an F(k,theta) spectrum"""
+        msg.start("Calculating F(k,theta) spectrum from F3D")
+        spec = cls.from_fkxy(Fkxy.from_f3d(f3d))
+        msg.stop()
+        return spec
 
     @classmethod
     def from_fkxy(cls, fkxy: Fkxy) -> FkTheta:
+        """Takes in a F(ky,kx)-spectrum and regrids to an F(k,theta) spectrum"""
+        msg.start("Calculating F(k,theta) spectrum from F(ky,kx)")
         dk = 2 * np.pi / 80
         kx, ky = np.meshgrid(fkxy.kx(), fkxy.ky())
         kxy = (kx**2 + ky**2) ** 0.5
-        spec_data = fkxy.spec()
+        spec_data = fkxy.spec(dask=False).ravel()
         k_vec = np.arange(0.01, 7, dk)
 
         # Interpolate using 0 to 2*pi so we are continuous around 180
         dD = 5
         # Captures energy better to use a high dtheta in interpolation
         refine_factor = 50
+
+        msg.middle("Interpolating")
+        msg.plain("Southern sector...")
         theta_south = np.arctan2(kx, ky)
         theta_vec = np.deg2rad(np.arange(0, 360, dD / refine_factor))
         theta_grid_south, k_grid = np.meshgrid(
             theta_vec,
             k_vec,
         )
+
         spec_south = griddata(
             (theta_south.ravel(), kxy.ravel()),
-            spec_data.ravel(),
+            spec_data,
             (theta_grid_south, k_grid),
             method="linear",
         )
 
         # Interpolate using -pi to pi so we are continuous around 0
+        msg.plain("Northern sector...")
         theta_north = np.arctan2(kx, ky)
         mask = theta_north > np.pi
         theta_north[mask] = theta_north[mask] - 2 * np.pi
@@ -78,12 +90,13 @@ class FkTheta(Spectrum2D):
         theta_grid_north[mask] = theta_grid_south[mask] - 2 * np.pi
         spec_north = griddata(
             (theta_north.ravel(), kxy.ravel()),
-            spec_data.ravel(),
+            spec_data,
             (theta_grid_north, k_grid),
             method="linear",
         )
 
         # Combine north and south spec
+        msg.plain("Combining north and south...")
         spec = spec_north
         ind0, ind1 = (
             len(theta_vec) // 2 - len(theta_vec) // 4,
@@ -93,6 +106,7 @@ class FkTheta(Spectrum2D):
 
         spec[np.isnan(spec)] = 0
 
+        msg.plain("Average down to 5 degree resolution...")
         # Bin average down to dD (e.g. 5) degrees
         val_roll = np.matlib.repmat(spec.T, 3, 1).T
         theta_vec_mean = theta_vec[::refine_factor]
@@ -105,7 +119,8 @@ class FkTheta(Spectrum2D):
             )
 
         fktheta = cls(lon=fkxy.lon(), lat=fkxy.lat(), theta=theta_vec_mean, k=k_vec)
-        fktheta.set_spec(spec_mean, allow_reshape=True)
+        fktheta.set_spec(spec_mean)
+        msg.stop()
         return fktheta
 
     def plot(self):
@@ -238,7 +253,9 @@ class Fkyf(Spectrum2D):
 class Fkxy(PointSkeleton, SpecAttributes):
     @classmethod
     def from_f3d(cls, f3d: F3D) -> Fkxy:
+        msg.start("Calculating F(ky,kx) spectrum from F3D")
         spec_ds = f3d.ds().integrate(coord="freq")
+        msg.stop()
         return cls.from_ds(spec_ds)
 
     def m(self, moment: float, method: str = "integrate") -> float:
@@ -246,7 +263,7 @@ class Fkxy(PointSkeleton, SpecAttributes):
             self.spec(data_array=True)
             .integrate(coord="kx")
             .integrate(coord="ky")
-            .values[0]
+            .values
         )
 
     def plot(self, ax=None, fig=None, log=True, vmin=None, vmax=None, cbar=True):
