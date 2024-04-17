@@ -1,0 +1,12 @@
+name: drq
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.9
+  - xarray
+  - numpy
+  - pandas
+  - scipy
+  - geo-skeletons>=0.13.2
+  - matplotlib
+  - cmocean
